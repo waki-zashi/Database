@@ -161,14 +161,21 @@ public class MainWindow extends JFrame {
     }
 
     private void deleteRecord() {
-        String id = JOptionPane.showInputDialog(this, "Введите ID для удаления:");
-        if (id == null) return;
+        String idStr = JOptionPane.showInputDialog(this, "Введите ID для удаления:");
+        if (idStr == null) return;
 
-        db.deleteByField("id", id);
+        int id = Integer.parseInt(idStr);
+
+        if (!db.deleteById(id)) {
+            JOptionPane.showMessageDialog(this, "Товар не найден");
+            return;
+        }
+
         try { db.save(); } catch (IOException e) { e.printStackTrace(); }
 
         refreshTable();
     }
+
 
     private void search() {
         String field = JOptionPane.showInputDialog(this,
