@@ -62,7 +62,6 @@ public class Monitoring extends JPanel {
 
         tabbedPane.addTab("Статистика", statsMainPanel);
 
-        // Вкладка с логами
         logArea = new JTextArea();
         logArea.setEditable(false);
         JScrollPane logScrollPane = new JScrollPane(logArea);

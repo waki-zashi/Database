@@ -9,12 +9,13 @@ import java.awt.*;
 import java.io.IOException;
 import java.util.List;
 
-public class MainWindow extends JFrame {
+public class MainWindow extends JFrame implements Database.DatabaseListener {
 
     private final Database db = new Database("products.db");
     private final DefaultTableModel tableModel;
     private final JTable table;
     private Monitoring monitoring;
+    private JTabbedPane tabs;
 
     public MainWindow() {
         setTitle("Учет товаров магазина");
@@ -22,8 +23,13 @@ public class MainWindow extends JFrame {
         setDefaultCloseOperation(EXIT_ON_CLOSE);
         setLocationRelativeTo(null);
 
-        try { db.load(); }
-        catch (IOException e) { e.printStackTrace(); }
+        try {
+            db.load();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+
+        db.addDatabaseListener(this);
 
         String[] columns = {"ID", "Название", "Кол-во", "Цена", "Поставщик"};
 
@@ -33,15 +39,20 @@ public class MainWindow extends JFrame {
 
         JPanel mainPanel = createMainPanel();
 
-        JTabbedPane tabs = new JTabbedPane();
+        tabs = new JTabbedPane();
         tabs.addTab("База данных", mainPanel);
         monitoring = new Monitoring(db);
         tabs.addTab("Мониторинг", monitoring);
         tabs.addTab("SQL Console", new SQLConsolePanel(db));
 
+        tabs.addChangeListener(e -> {
+            if (tabs.getSelectedComponent() == monitoring) {
+                monitoring.refresh();
+            }
+        });
+
         add(tabs);
         setVisible(true);
-        monitoring.refresh();
     }
 
     private JPanel createMainPanel() {
@@ -93,6 +104,15 @@ public class MainWindow extends JFrame {
         }
     }
 
+    @Override
+    public void onDatabaseChanged() {
+        refreshTable();
+
+        if (tabs.getSelectedComponent() == monitoring) {
+            monitoring.refresh();
+        }
+    }
+
     private void addRecord() {
         JTextField id = new JTextField();
         JTextField name = new JTextField();
@@ -112,23 +132,27 @@ public class MainWindow extends JFrame {
                 "Добавить товар", JOptionPane.OK_CANCEL_OPTION);
 
         if (res == JOptionPane.OK_OPTION) {
-            Record r = new Record(
-                    Integer.parseInt(id.getText()),
-                    name.getText(),
-                    Integer.parseInt(qty.getText()),
-                    Double.parseDouble(price.getText()),
-                    sup.getText()
-            );
+            try {
+                Record r = new Record(
+                        Integer.parseInt(id.getText()),
+                        name.getText(),
+                        Integer.parseInt(qty.getText()),
+                        Double.parseDouble(price.getText()),
+                        sup.getText()
+                );
 
-            if (!db.addRecord(r)) {
-                JOptionPane.showMessageDialog(this, "ID уже существует!");
-                return;
+                if (!db.addRecord(r)) {
+                    JOptionPane.showMessageDialog(this, "ID уже существует!");
+                    return;
+                }
+
+                db.save();
+
+            } catch (NumberFormatException ex) {
+                JOptionPane.showMessageDialog(this, "Ошибка в числовых полях!");
+            } catch (IOException ex) {
+                JOptionPane.showMessageDialog(this, "Ошибка сохранения: " + ex.getMessage());
             }
-
-            try { db.save(); } catch (IOException ex) { ex.printStackTrace(); }
-
-            refreshTable();
-            monitoring.refresh();
         }
     }
 
@@ -145,13 +169,17 @@ public class MainWindow extends JFrame {
                 "Поставка товара", JOptionPane.OK_CANCEL_OPTION);
 
         if (res == JOptionPane.OK_OPTION) {
-            if (db.supply(Integer.parseInt(id.getText()),
-                    Integer.parseInt(amount.getText()))) {
-                try { db.save(); } catch (IOException e) { e.printStackTrace(); }
-                refreshTable();
-                monitoring.refresh();
-            } else {
-                JOptionPane.showMessageDialog(this, "Товар не найден");
+            try {
+                if (db.supply(Integer.parseInt(id.getText()),
+                        Integer.parseInt(amount.getText()))) {
+                    db.save();
+                } else {
+                    JOptionPane.showMessageDialog(this, "Товар не найден");
+                }
+            } catch (NumberFormatException ex) {
+                JOptionPane.showMessageDialog(this, "Ошибка в числовых полях!");
+            } catch (IOException ex) {
+                JOptionPane.showMessageDialog(this, "Ошибка сохранения: " + ex.getMessage());
             }
         }
     }
@@ -169,14 +197,18 @@ public class MainWindow extends JFrame {
                 "Продажа товара", JOptionPane.OK_CANCEL_OPTION);
 
         if (res == JOptionPane.OK_OPTION) {
-            if (!db.sell(Integer.parseInt(id.getText()),
-                    Integer.parseInt(amount.getText()))) {
-                JOptionPane.showMessageDialog(this,
-                        "Недостаточно товара или товар не найден");
-            } else {
-                try { db.save(); } catch (IOException e) { e.printStackTrace(); }
-                refreshTable();
-                monitoring.refresh();
+            try {
+                if (!db.sell(Integer.parseInt(id.getText()),
+                        Integer.parseInt(amount.getText()))) {
+                    JOptionPane.showMessageDialog(this,
+                            "Недостаточно товара или товар не найден");
+                } else {
+                    db.save();
+                }
+            } catch (NumberFormatException ex) {
+                JOptionPane.showMessageDialog(this, "Ошибка в числовых полях!");
+            } catch (IOException ex) {
+                JOptionPane.showMessageDialog(this, "Ошибка сохранения: " + ex.getMessage());
             }
         }
     }
@@ -185,17 +217,21 @@ public class MainWindow extends JFrame {
         String idStr = JOptionPane.showInputDialog(this, "Введите ID для удаления:");
         if (idStr == null) return;
 
-        int id = Integer.parseInt(idStr);
+        try {
+            int id = Integer.parseInt(idStr);
 
-        if (!db.deleteById(id)) {
-            JOptionPane.showMessageDialog(this, "Товар не найден");
-            return;
+            if (!db.deleteById(id)) {
+                JOptionPane.showMessageDialog(this, "Товар не найден");
+                return;
+            }
+
+            db.save();
+
+        } catch (NumberFormatException ex) {
+            JOptionPane.showMessageDialog(this, "Неверный формат ID!");
+        } catch (IOException ex) {
+            JOptionPane.showMessageDialog(this, "Ошибка сохранения: " + ex.getMessage());
         }
-
-        try { db.save(); } catch (IOException e) { e.printStackTrace(); }
-
-        refreshTable();
-        monitoring.refresh();
     }
 
     private void search() {
@@ -218,21 +254,24 @@ public class MainWindow extends JFrame {
     private void backup() {
         try {
             db.backup("products_backup.db");
-            JOptionPane.showMessageDialog(this, "Backup OK");
-            monitoring.refresh();
+            JOptionPane.showMessageDialog(this, "Backup создан успешно");
         } catch (Exception e) {
-            JOptionPane.showMessageDialog(this, "Ошибка backup");
+            JOptionPane.showMessageDialog(this, "Ошибка backup: " + e.getMessage());
         }
     }
 
     private void restore() {
         try {
             db.restore("products_backup.db");
-            JOptionPane.showMessageDialog(this, "Restore OK");
-            refreshTable();
-            monitoring.refresh();
+            JOptionPane.showMessageDialog(this, "Restore выполнен успешно");
         } catch (Exception e) {
-            JOptionPane.showMessageDialog(this, "Ошибка restore");
+            JOptionPane.showMessageDialog(this, "Ошибка restore: " + e.getMessage());
+        }
+    }
+
+    public void refreshMonitoring() {
+        if (monitoring != null) {
+            monitoring.refresh();
         }
     }
 }

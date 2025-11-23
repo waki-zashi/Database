@@ -15,12 +15,31 @@ public class Database {
     private final SecretKeySpec secretKey = new SecretKeySpec(AES_KEY, "AES");
 
     private Map<Integer, Record> table = new HashMap<>();
-
     private Map<String, Set<Integer>> nameIndex = new HashMap<>();
     private Map<String, Set<Integer>> supplierIndex = new HashMap<>();
 
+    private List<DatabaseListener> listeners = new ArrayList<>();
+
     public Database(String filename) {
         this.filename = filename;
+    }
+
+    public interface DatabaseListener {
+        void onDatabaseChanged();
+    }
+
+    public void addDatabaseListener(DatabaseListener listener) {
+        listeners.add(listener);
+    }
+
+    public void removeDatabaseListener(DatabaseListener listener) {
+        listeners.remove(listener);
+    }
+
+    private void notifyListeners() {
+        for (DatabaseListener listener : listeners) {
+            listener.onDatabaseChanged();
+        }
     }
 
     private boolean compare(double a, double b, String op) {
@@ -78,6 +97,7 @@ public class Database {
         }
 
         log("LOAD database");
+        notifyListeners();
     }
 
     public void save() throws IOException {
@@ -131,6 +151,7 @@ public class Database {
         table.put(r.id, r);
         indexRecord(r);
         log("ADD: " + r);
+        notifyListeners();
         return true;
     }
 
@@ -140,6 +161,7 @@ public class Database {
 
         removeIndex(r);
         log("DELETE BY ID: " + id);
+        notifyListeners();
         return true;
     }
 
@@ -156,6 +178,7 @@ public class Database {
         nameIndex.clear();
         supplierIndex.clear();
         log("DELETE ALL");
+        notifyListeners();
     }
 
     public boolean supply(int id, int amount) {
@@ -163,6 +186,7 @@ public class Database {
         if (r == null) return false;
         r.quantity += amount;
         log("SUPPLY: id=" + id + " amount=" + amount);
+        notifyListeners();
         return true;
     }
 
@@ -171,6 +195,7 @@ public class Database {
         if (r == null || r.quantity < amount) return false;
         r.quantity -= amount;
         log("SELL: id=" + id + " amount=" + amount);
+        notifyListeners();
         return true;
     }
 
@@ -233,7 +258,6 @@ public class Database {
         return result;
     }
 
-
     public List<Record> getSorted(String field) {
         List<Record> list = getAll();
 
@@ -251,7 +275,6 @@ public class Database {
     }
 
     public int update(String field, String newValue, String whereField, String whereValue) {
-
         int count = 0;
 
         for (Record r : table.values()) {
@@ -281,6 +304,10 @@ public class Database {
         log("UPDATE SET " + field + "=" + newValue +
                 " WHERE " + whereField + "=" + whereValue +
                 " ; updated=" + count);
+
+        if (count > 0) {
+            notifyListeners();
+        }
 
         return count;
     }
@@ -319,5 +346,21 @@ public class Database {
         }
         log("RESTORE from backup: " + backupFile);
         load();
+    }
+
+    public int getTotalRecords() {
+        return table.size();
+    }
+
+    public int getTotalQuantity() {
+        return table.values().stream().mapToInt(r -> r.quantity).sum();
+    }
+
+    public double getTotalValue() {
+        return table.values().stream().mapToDouble(r -> r.quantity * r.price).sum();
+    }
+
+    public long getLowStockCount(int threshold) {
+        return table.values().stream().filter(r -> r.quantity < threshold).count();
     }
 }
