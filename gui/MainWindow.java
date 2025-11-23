@@ -13,6 +13,8 @@ public class MainWindow extends JFrame {
 
     private final Database db = new Database("products.db");
     private final DefaultTableModel tableModel;
+    private final JTable table;
+    private Monitoring monitoring;
 
     public MainWindow() {
         setTitle("Учет товаров магазина");
@@ -26,11 +28,27 @@ public class MainWindow extends JFrame {
         String[] columns = {"ID", "Название", "Кол-во", "Цена", "Поставщик"};
 
         tableModel = new DefaultTableModel(columns, 0);
-        JTable table = new JTable(tableModel);
+        table = new JTable(tableModel);
         refreshTable();
 
+        JPanel mainPanel = createMainPanel();
+
+        JTabbedPane tabs = new JTabbedPane();
+        tabs.addTab("База данных", mainPanel);
+        monitoring = new Monitoring(db);
+        tabs.addTab("Мониторинг", monitoring);
+        tabs.addTab("SQL Console", new SQLConsolePanel(db));
+
+        add(tabs);
+        setVisible(true);
+        monitoring.refresh();
+    }
+
+    private JPanel createMainPanel() {
+        JPanel mainPanel = new JPanel(new BorderLayout());
+
         JScrollPane scrollPane = new JScrollPane(table);
-        add(scrollPane, BorderLayout.CENTER);
+        mainPanel.add(scrollPane, BorderLayout.CENTER);
 
         JPanel buttons = new JPanel(new GridLayout(1, 8));
 
@@ -52,7 +70,7 @@ public class MainWindow extends JFrame {
         buttons.add(restoreBtn);
         buttons.add(refreshBtn);
 
-        add(buttons, BorderLayout.SOUTH);
+        mainPanel.add(buttons, BorderLayout.SOUTH);
 
         addBtn.addActionListener(e -> addRecord());
         supplyBtn.addActionListener(e -> supply());
@@ -63,7 +81,7 @@ public class MainWindow extends JFrame {
         restoreBtn.addActionListener(e -> restore());
         refreshBtn.addActionListener(e -> refreshTable());
 
-        setVisible(true);
+        return mainPanel;
     }
 
     private void refreshTable() {
@@ -110,6 +128,7 @@ public class MainWindow extends JFrame {
             try { db.save(); } catch (IOException ex) { ex.printStackTrace(); }
 
             refreshTable();
+            monitoring.refresh();
         }
     }
 
@@ -130,6 +149,7 @@ public class MainWindow extends JFrame {
                     Integer.parseInt(amount.getText()))) {
                 try { db.save(); } catch (IOException e) { e.printStackTrace(); }
                 refreshTable();
+                monitoring.refresh();
             } else {
                 JOptionPane.showMessageDialog(this, "Товар не найден");
             }
@@ -156,6 +176,7 @@ public class MainWindow extends JFrame {
             } else {
                 try { db.save(); } catch (IOException e) { e.printStackTrace(); }
                 refreshTable();
+                monitoring.refresh();
             }
         }
     }
@@ -174,8 +195,8 @@ public class MainWindow extends JFrame {
         try { db.save(); } catch (IOException e) { e.printStackTrace(); }
 
         refreshTable();
+        monitoring.refresh();
     }
-
 
     private void search() {
         String field = JOptionPane.showInputDialog(this,
@@ -198,6 +219,7 @@ public class MainWindow extends JFrame {
         try {
             db.backup("products_backup.db");
             JOptionPane.showMessageDialog(this, "Backup OK");
+            monitoring.refresh();
         } catch (Exception e) {
             JOptionPane.showMessageDialog(this, "Ошибка backup");
         }
@@ -208,9 +230,9 @@ public class MainWindow extends JFrame {
             db.restore("products_backup.db");
             JOptionPane.showMessageDialog(this, "Restore OK");
             refreshTable();
+            monitoring.refresh();
         } catch (Exception e) {
             JOptionPane.showMessageDialog(this, "Ошибка restore");
         }
     }
-
 }

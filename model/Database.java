@@ -23,6 +23,16 @@ public class Database {
         this.filename = filename;
     }
 
+    private boolean compare(double a, double b, String op) {
+        return switch (op) {
+            case ">"  -> a > b;
+            case "<"  -> a < b;
+            case ">=" -> a >= b;
+            case "<=" -> a <= b;
+            default   -> a == b;
+        };
+    }
+
     private void log(String text) {
         try (BufferedWriter bw = new BufferedWriter(new FileWriter(logFile, true))) {
             bw.write("[" + new Date() + "] " + text);
@@ -133,6 +143,21 @@ public class Database {
         return true;
     }
 
+    public int deleteWhere(String field, String value) {
+        List<Record> found = search(field, value);
+        for (Record r : found) {
+            deleteById(r.id);
+        }
+        return found.size();
+    }
+
+    public void deleteAll() {
+        table.clear();
+        nameIndex.clear();
+        supplierIndex.clear();
+        log("DELETE ALL");
+    }
+
     public boolean supply(int id, int amount) {
         Record r = table.get(id);
         if (r == null) return false;
@@ -188,6 +213,27 @@ public class Database {
         return res;
     }
 
+    public List<Record> search(String field, String value, String op) {
+        List<Record> result = new ArrayList<>();
+
+        for (Record r : table.values()) {
+
+            boolean match = switch (field) {
+                case "price" -> compare(r.price, Double.parseDouble(value), op);
+                case "quantity" -> compare(r.quantity, Integer.parseInt(value), op);
+                case "id" -> compare(r.id, Integer.parseInt(value), op);
+                case "name" -> r.name.equals(value);
+                case "supplier" -> r.supplier.equals(value);
+                default -> false;
+            };
+
+            if (match) result.add(r);
+        }
+
+        return result;
+    }
+
+
     public List<Record> getSorted(String field) {
         List<Record> list = getAll();
 
@@ -202,6 +248,41 @@ public class Database {
 
         log("SORT by " + field);
         return list;
+    }
+
+    public int update(String field, String newValue, String whereField, String whereValue) {
+
+        int count = 0;
+
+        for (Record r : table.values()) {
+
+            boolean match = switch (whereField) {
+                case "id"       -> r.id == Integer.parseInt(whereValue);
+                case "price"    -> r.price == Double.parseDouble(whereValue);
+                case "quantity" -> r.quantity == Integer.parseInt(whereValue);
+                case "name"     -> r.name.equals(whereValue);
+                case "supplier" -> r.supplier.equals(whereValue);
+                default         -> false;
+            };
+
+            if (!match) continue;
+
+            switch (field) {
+                case "id"       -> r.id = Integer.parseInt(newValue);
+                case "price"    -> r.price = Double.parseDouble(newValue);
+                case "quantity" -> r.quantity = Integer.parseInt(newValue);
+                case "name"     -> r.name = newValue;
+                case "supplier" -> r.supplier = newValue;
+            }
+
+            count++;
+        }
+
+        log("UPDATE SET " + field + "=" + newValue +
+                " WHERE " + whereField + "=" + whereValue +
+                " ; updated=" + count);
+
+        return count;
     }
 
     private boolean validate(Record r) {
